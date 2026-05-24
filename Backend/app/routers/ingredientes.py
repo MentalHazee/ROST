@@ -3,6 +3,7 @@ from typing import Annotated
 from sqlmodel import Session
 
 from app.database import get_session
+from app.dependencies.auth import require_rol
 from app.schemas.ingrediente import IngredienteCreate, IngredienteRead, IngredienteUpdate
 from app.services import ingrediente_service
 
@@ -19,7 +20,7 @@ def listar_ingredientes(
     return ingrediente_service.get_all(session, skip, limit, es_alergeno)
 
 
-@router.post("/", response_model=IngredienteRead, status_code=201)
+@router.post("/", response_model=IngredienteRead, status_code=201, dependencies=[Depends(require_rol("ADMIN"))])
 def crear_ingrediente(data: IngredienteCreate, session: Session = Depends(get_session)):
     return ingrediente_service.create(session, data)
 
@@ -32,7 +33,7 @@ def obtener_ingrediente(item_id: int, session: Session = Depends(get_session)):
     return item
 
 
-@router.patch("/{item_id}", response_model=IngredienteRead)
+@router.patch("/{item_id}", response_model=IngredienteRead, dependencies=[Depends(require_rol("ADMIN"))])
 def actualizar_ingrediente(
     item_id: int,
     data: IngredienteUpdate,
@@ -44,7 +45,7 @@ def actualizar_ingrediente(
     return item
 
 
-@router.delete("/{item_id}", status_code=204)
+@router.delete("/{item_id}", status_code=204, dependencies=[Depends(require_rol("ADMIN"))])
 def eliminar_ingrediente(item_id: int, session: Session = Depends(get_session)):
     ok = ingrediente_service.delete(session, item_id)
     if not ok:

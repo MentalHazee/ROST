@@ -3,6 +3,7 @@ from typing import Annotated
 from sqlmodel import Session
 
 from app.database import get_session
+from app.dependencies.auth import require_rol
 from app.schemas.categoria import CategoriaCreate, CategoriaRead, CategoriaUpdate
 from app.services import categoria_service
 
@@ -18,7 +19,7 @@ def listar_categorias(
     return categoria_service.get_all(session, skip, limit)
 
 
-@router.post("/", response_model=CategoriaRead, status_code=201)
+@router.post("/", response_model=CategoriaRead, status_code=201, dependencies=[Depends(require_rol("ADMIN"))])
 def crear_categoria(data: CategoriaCreate, session: Session = Depends(get_session)):
     return categoria_service.create(session, data)
 
@@ -31,7 +32,7 @@ def obtener_categoria(item_id: int, session: Session = Depends(get_session)):
     return item
 
 
-@router.patch("/{item_id}", response_model=CategoriaRead)
+@router.patch("/{item_id}", response_model=CategoriaRead, dependencies=[Depends(require_rol("ADMIN"))])
 def actualizar_categoria(
     item_id: int,
     data: CategoriaUpdate,
@@ -43,7 +44,7 @@ def actualizar_categoria(
     return item
 
 
-@router.delete("/{item_id}", status_code=204)
+@router.delete("/{item_id}", status_code=204, dependencies=[Depends(require_rol("ADMIN"))])
 def eliminar_categoria(item_id: int, session: Session = Depends(get_session)):
     ok = categoria_service.delete(session, item_id)
     if not ok:

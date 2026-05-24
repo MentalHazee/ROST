@@ -3,6 +3,7 @@ from typing import Annotated
 from sqlmodel import Session
 
 from app.database import get_session
+from app.dependencies.auth import require_rol
 from app.schemas.unidad_medida import UnidadMedidaCreate, UnidadMedidaRead, UnidadMedidaUpdate
 from app.services import unidad_medida_service
 
@@ -18,7 +19,7 @@ def listar_unidades(
     return unidad_medida_service.get_all(session, skip, limit)
 
 
-@router.post("/", response_model=UnidadMedidaRead, status_code=201)
+@router.post("/", response_model=UnidadMedidaRead, status_code=201, dependencies=[Depends(require_rol("ADMIN"))])
 def crear_unidad(data: UnidadMedidaCreate, session: Session = Depends(get_session)):
     return unidad_medida_service.create(session, data)
 
@@ -31,7 +32,7 @@ def obtener_unidad(item_id: int, session: Session = Depends(get_session)):
     return item
 
 
-@router.patch("/{item_id}", response_model=UnidadMedidaRead)
+@router.patch("/{item_id}", response_model=UnidadMedidaRead, dependencies=[Depends(require_rol("ADMIN"))])
 def actualizar_unidad(
     item_id: int,
     data: UnidadMedidaUpdate,
@@ -43,7 +44,7 @@ def actualizar_unidad(
     return item
 
 
-@router.delete("/{item_id}", status_code=204)
+@router.delete("/{item_id}", status_code=204, dependencies=[Depends(require_rol("ADMIN"))])
 def eliminar_unidad(item_id: int, session: Session = Depends(get_session)):
     ok = unidad_medida_service.delete(session, item_id)
     if not ok:
