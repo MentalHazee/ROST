@@ -21,7 +21,7 @@ export default function RegisterPage() {
   });
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#ffeddb]">
+    <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('public/background.png')" }}>
       <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-sm">
         <div className="text-center mb-8">
           <img src="/logo.png" alt="ROST" className="h-12 mx-auto mb-4" />

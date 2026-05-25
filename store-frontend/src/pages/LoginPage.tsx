@@ -21,7 +21,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#FFEDDB]">
+    <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat" style={{ backgroundImage: "url('public/background.png')" }}>
       <div className="bg-surface-container-lowest rounded-xl shadow-[0_10px_20px_-5px_rgba(77,96,128,0.08)] p-10 border border-outline-variant/10 w-full max-w-[440px]">
         <div className="text-center mb-8">
           <img src="/logo.png" alt="ROST" className="h-14 mx-auto mb-6" />
