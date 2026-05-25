@@ -1,21 +1,36 @@
-from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, TYPE_CHECKING
+from datetime import datetime
+from sqlmodel import SQLModel, Field, Relationship, Column, DateTime, func, DECIMAL, CheckConstraint
+from decimal import Decimal
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from .producto import Producto
-    from .ingrediente import Ingrediente
-    from .unidad_medida import UnidadMedida
+    from app.models.producto import Producto
+    from app.models.ingrediente import Ingrediente
+    from app.models.unidad_medida import UnidadMedida
 
 
 class ProductoIngrediente(SQLModel, table=True):
-    __tablename__ = "productoingrediente"
+    __tablename__ = "productos_ingredientes"
 
-    producto_id: int = Field(foreign_key="producto.id", primary_key=True)
-    ingrediente_id: int = Field(foreign_key="ingrediente.id", primary_key=True)
-    cantidad: float = Field(gt=0)
-    unidad_medida_id: int = Field(foreign_key="unidadmedida.id")
-    es_removible: bool = Field(default=False)
+    producto_id: Optional[int] = Field(
+        default=None, foreign_key="productos.id", primary_key=True
+    )
+    ingrediente_id: Optional[int] = Field(
+        default=None, foreign_key="ingredientes.id", primary_key=True
+    )
+    cantidad: Optional[Decimal] = Field(
+        default=None,
+        sa_column=Column(DECIMAL(10, 3), CheckConstraint("cantidad > 0")),
+    )
+    unidad_medida_id: int = Field(foreign_key="unidades_medida.id", nullable=False)
+    es_removible: Optional[bool] = Field(default=False)
+    created_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), server_default=func.now()),
+    )
 
-    producto: Optional["Producto"] = Relationship(back_populates="ingrediente_links")
-    ingrediente: Optional["Ingrediente"] = Relationship(back_populates="producto_links")
-    unidad_medida: Optional["UnidadMedida"] = Relationship(back_populates="ingrediente_links")
+    producto: "Producto" = Relationship(back_populates="productos_ingredientes")
+    ingrediente: "Ingrediente" = Relationship(back_populates="productos_ingredientes")
+    unidad_medida: "UnidadMedida" = Relationship(
+        back_populates="productos_ingredientes"
+    )

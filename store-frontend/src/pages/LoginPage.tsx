@@ -1,0 +1,95 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    try {
+      await login(email, password);
+      navigate("/");
+    } catch {
+      setError("Email o contraseña incorrectos");
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#FFEDDB]">
+      <div className="bg-surface-container-lowest rounded-xl shadow-[0_10px_20px_-5px_rgba(77,96,128,0.08)] p-10 border border-outline-variant/10 w-full max-w-[440px]">
+        <div className="text-center mb-8">
+          <img src="/logo.png" alt="ROST" className="h-14 mx-auto mb-6" />
+          <h2 className="font-headline text-2xl font-bold text-primary">Iniciar Sesión</h2>
+          <p className="font-body text-on-surface-variant text-sm mt-1">Accedé a tu cuenta de ROST</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block font-body text-xs font-semibold text-on-surface-variant uppercase tracking-[0.08em] mb-1.5">
+              Email
+            </label>
+            <div className="relative">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full bg-[#F5E6D3] border border-outline-variant rounded-lg pl-5 pr-4 py-3 text-on-surface font-body text-sm placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary-container"
+                placeholder="Tu email"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block font-body text-xs font-semibold text-on-surface-variant uppercase tracking-[0.08em] mb-1.5">
+              Contraseña
+            </label>
+            <div className="relative">
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full bg-[#F5E6D3] border border-outline-variant rounded-lg pl-5 pr-4 py-3 text-on-surface font-body text-sm placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary-container"
+                placeholder="••••••••"
+              />
+            </div>
+          </div>
+          {error && (
+            <div className="flex items-center gap-2 bg-error-container text-on-error-container px-4 py-3 rounded-lg text-sm font-body">
+              <span className="material-symbols-outlined text-[18px]">error</span>
+              {error}
+            </div>
+          )}
+          <button
+            type="submit"
+            className="w-full bg-primary-container text-on-primary py-4 rounded-lg font-body font-semibold uppercase tracking-[0.1em] text-sm hover:opacity-90 transition-all"
+          >
+            Ingresar
+          </button>
+        </form>
+
+        <div className="flex items-center gap-3 mt-8">
+          <div className="flex-1 h-px bg-outline-variant/30" />
+          <span className="font-body text-[11px] text-on-surface-variant/50 uppercase tracking-[0.15em]">Cliente ROST</span>
+          <div className="flex-1 h-px bg-outline-variant/30" />
+        </div>
+
+        <p className="text-center font-body text-sm text-on-surface-variant mt-6">
+          ¿No tenés cuenta?{" "}
+          <button
+            onClick={() => navigate("/register")}
+            className="text-primary font-semibold hover:underline"
+          >
+            Registrate
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+}

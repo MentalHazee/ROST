@@ -1,44 +1,36 @@
-import client from './client'
-import type { Producto, ProductoDetalle, ProductoCreate, ProductoUpdate, ProductoCategoriaLinkCreate, ProductoIngredienteLinkCreate, ProductoCategoriaLink, ProductoIngredienteLink } from '../types/producto'
+import api from './client';
+import type { Producto, ProductoCreate, ProductoUpdate } from '../types';
 
-export async function getProductos(): Promise<Producto[]> {
-  const { data } = await client.get<Producto[]>('/productos')
-  return data
+interface GetProductosParams {
+  q?: string;
+  categoria_id?: number;
+  disponible?: boolean;
 }
 
-export async function getProducto(id: number): Promise<ProductoDetalle> {
-  const { data } = await client.get<ProductoDetalle>(`/productos/${id}`)
-  return data
+export async function getProductos(params?: GetProductosParams): Promise<Producto[]> {
+  const query: Record<string, string> = {};
+  if (params?.q) query.q = params.q;
+  if (params?.categoria_id) query.categoria_id = String(params.categoria_id);
+  if (params?.disponible !== undefined) query.disponible = String(params.disponible);
+  const res = await api.get<Producto[]>('/productos', { params: query });
+  return res.data;
 }
 
-export async function createProducto(payload: ProductoCreate): Promise<Producto> {
-  const { data } = await client.post<Producto>('/productos', payload)
-  return data
+export async function getProductoById(id: number): Promise<Producto> {
+  const res = await api.get<Producto>(`/productos/${id}`);
+  return res.data;
 }
 
-export async function updateProducto(id: number, payload: ProductoUpdate): Promise<Producto> {
-  const { data } = await client.patch<Producto>(`/productos/${id}`, payload)
-  return data
+export async function createProducto(data: ProductoCreate): Promise<Producto> {
+  const res = await api.post<Producto>('/productos', data);
+  return res.data;
+}
+
+export async function updateProducto(id: number, data: ProductoUpdate): Promise<Producto> {
+  const res = await api.patch<Producto>(`/productos/${id}`, data);
+  return res.data;
 }
 
 export async function deleteProducto(id: number): Promise<void> {
-  await client.delete(`/productos/${id}`)
-}
-
-export async function addCategoriaAProducto(productoId: number, payload: ProductoCategoriaLinkCreate): Promise<ProductoCategoriaLink> {
-  const { data } = await client.post<ProductoCategoriaLink>(`/productos/${productoId}/categorias`, payload)
-  return data
-}
-
-export async function removeCategoriaDeProducto(productoId: number, categoriaId: number): Promise<void> {
-  await client.delete(`/productos/${productoId}/categorias/${categoriaId}`)
-}
-
-export async function addIngredienteAProducto(productoId: number, payload: ProductoIngredienteLinkCreate): Promise<ProductoIngredienteLink> {
-  const { data } = await client.post<ProductoIngredienteLink>(`/productos/${productoId}/ingredientes`, payload)
-  return data
-}
-
-export async function removeIngredienteDeProducto(productoId: number, ingredienteId: number): Promise<void> {
-  await client.delete(`/productos/${productoId}/ingredientes/${ingredienteId}`)
+  await api.delete(`/productos/${id}`);
 }

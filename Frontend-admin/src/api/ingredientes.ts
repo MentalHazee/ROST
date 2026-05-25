@@ -1,26 +1,34 @@
-import client from './client'
-import type { Ingrediente, IngredienteCreate, IngredienteUpdate } from '../types/ingrediente'
+import api from './client';
+import type { Ingrediente, IngredienteCreate, IngredienteUpdate } from '../types';
 
-export async function getIngredientes(): Promise<Ingrediente[]> {
-  const { data } = await client.get<Ingrediente[]>('/ingredientes')
-  return data
+interface GetIngredientesParams {
+  q?: string;
+  es_alergeno?: boolean;
 }
 
-export async function getIngrediente(id: number): Promise<Ingrediente> {
-  const { data } = await client.get<Ingrediente>(`/ingredientes/${id}`)
-  return data
+export async function getIngredientes(params?: GetIngredientesParams): Promise<Ingrediente[]> {
+  const query: Record<string, string> = {};
+  if (params?.q) query.q = params.q;
+  if (params?.es_alergeno !== undefined) query.es_alergeno = String(params.es_alergeno);
+  const res = await api.get<Ingrediente[]>('/ingredientes', { params: query });
+  return res.data;
 }
 
-export async function createIngrediente(payload: IngredienteCreate): Promise<Ingrediente> {
-  const { data } = await client.post<Ingrediente>('/ingredientes', payload)
-  return data
+export async function getIngredienteById(id: number): Promise<Ingrediente> {
+  const res = await api.get<Ingrediente>(`/ingredientes/${id}`);
+  return res.data;
 }
 
-export async function updateIngrediente(id: number, payload: IngredienteUpdate): Promise<Ingrediente> {
-  const { data } = await client.patch<Ingrediente>(`/ingredientes/${id}`, payload)
-  return data
+export async function createIngrediente(data: IngredienteCreate): Promise<Ingrediente> {
+  const res = await api.post<Ingrediente>('/ingredientes', data);
+  return res.data;
+}
+
+export async function updateIngrediente(id: number, data: IngredienteUpdate): Promise<Ingrediente> {
+  const res = await api.patch<Ingrediente>(`/ingredientes/${id}`, data);
+  return res.data;
 }
 
 export async function deleteIngrediente(id: number): Promise<void> {
-  await client.delete(`/ingredientes/${id}`)
+  await api.delete(`/ingredientes/${id}`);
 }

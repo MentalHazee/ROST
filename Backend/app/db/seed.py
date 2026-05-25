@@ -1,65 +1,248 @@
 from sqlmodel import Session, select
-from app.database import engine, create_db_and_tables
+from app.core.security import hash_password
+from app.models.unidad_medida import UnidadMedida
+from app.models.categoria import Categoria
+from app.models.ingrediente import Ingrediente
+from app.models.producto import Producto
+from app.models.producto_categoria import ProductoCategoria
+from app.models.producto_ingrediente import ProductoIngrediente
 from app.models.rol import Rol
 from app.models.usuario import Usuario
 from app.models.usuario_rol import UsuarioRol
 from app.models.forma_pago import FormaPago
 from app.models.estado_pedido import EstadoPedido
-from app.utils.security import hash_password
 
 
-# Importar todos los modelos para que SQLAlchemy los registre antes de
-# cualquier operación. El orden de los imports es crítico para resolver
-# las relaciones circulares (Usuario↔Pedido, Producto↔Ingrediente, etc.)
-from app.models import (
-    unidad_medida, categoria, ingrediente, producto,       # noqa: F401, E402
-    producto_categoria, producto_ingrediente,              # noqa: F401, E402
-    direccion_entrega, pedido, detalle_pedido,              # noqa: F401, E402
-    historial_estado_pedido,                                # noqa: F401, E402
-)
+def _seed_unidades_medida(session: Session):
+    if session.exec(select(UnidadMedida).limit(1)).first():
+        return
+    items = [
+        UnidadMedida(nombre="kilogramo", simbolo="kg", tipo="masa"),
+        UnidadMedida(nombre="gramo", simbolo="g", tipo="masa"),
+        UnidadMedida(nombre="litro", simbolo="L", tipo="volumen"),
+        UnidadMedida(nombre="mililitro", simbolo="mL", tipo="volumen"),
+        UnidadMedida(nombre="pieza", simbolo="u", tipo="unidad"),
+        UnidadMedida(nombre="docena", simbolo="doc", tipo="unidad"),
+        UnidadMedida(nombre="metro cuadrado", simbolo="m²", tipo="area"),
+    ]
+    session.add_all(items)
+    session.flush()
 
 
-def seed():
-    create_db_and_tables()
-    with Session(engine) as session:
-        # --- Roles (PK semántica) ---
-        roles = [
-            ("ADMIN",   "Administrador",       "Acceso total sin restricciones"),
-            ("STOCK",   "Gestor de Stock",      "Actualiza stock y disponible"),
-            ("PEDIDOS", "Gestor de Pedidos",    "Avanza estados CONFIRMADO→ENTREGADO"),
-            ("CLIENT",  "Cliente",              "Opera solo sus propios datos"),
-        ]
-        for codigo, nombre, desc in roles:
-            if not session.get(Rol, codigo):
-                session.add(Rol(codigo=codigo, nombre=nombre, descripcion=desc))
-
-        # --- Formas de pago ---
-        for nombre in ["Efectivo", "Tarjeta de crédito", "Transferencia", "Mercado Pago"]:
-            if not session.exec(select(FormaPago).where(FormaPago.nombre == nombre)).first():
-                session.add(FormaPago(nombre=nombre))
-
-        # --- Estados de pedido ---
-        for codigo in ["PENDIENTE", "CONFIRMADO", "EN_PREP", "EN_CAMINO", "ENTREGADO", "CANCELADO"]:
-            if not session.get(EstadoPedido, codigo):
-                session.add(EstadoPedido(codigo=codigo))
-
-        session.commit()
-
-        # --- Usuario admin ---
-        if not session.exec(select(Usuario).where(Usuario.email == "admin@store.com")).first():
-            admin = Usuario(
-                nombre="Admin",
-                apellido="Sistema",
-                email="admin@store.com",
-                password_hash=hash_password("admin1234"),
-            )
-            session.add(admin)
+def _seed_categorias(session: Session):
+    existing = session.exec(select(Categoria).limit(1)).first()
+    if existing:
+        # Si ya existen pero son las viejas placeholder, las reemplazamos
+        old_names = {"Bebidas", "Lácteos", "Panadería"}
+        current_names = {existing.nombre}
+        if existing.nombre in old_names:
+            # Solo reemplazar si detectamos datos placeholder
+            for c in session.exec(select(Categoria)).all():
+                session.delete(c)
             session.flush()
-            session.add(UsuarioRol(usuario_id=admin.id, rol_codigo="ADMIN"))
-            session.commit()
+        else:
+            return
+    items = [
+        Categoria(nombre="Cafés", descripcion="Cafés de especialidad y espresso"),
+        Categoria(nombre="Bebidas", descripcion="Bebidas frías y otras preparaciones"),
+        Categoria(nombre="Pastelería", descripcion="Croissants y acompañamientos"),
+    ]
+    session.add_all(items)
+    session.flush()
 
-    print("[OK] Seed completado.")
+
+def _seed_ingredientes(session: Session):
+    existing = session.exec(select(Ingrediente).limit(1)).first()
+    if existing:
+        old_ingredients = {"Harina", "Azúcar", "Leche", "Huevo", "Sal", "Mantequilla"}
+        if existing.nombre in old_ingredients:
+            for i in session.exec(select(Ingrediente)).all():
+                session.delete(i)
+            session.flush()
+        else:
+            return
+    items = [
+        Ingrediente(nombre="Café en grano", descripcion="Café de especialidad tostado"),
+        Ingrediente(nombre="Leche", descripcion="Leche entera"),
+        Ingrediente(nombre="Dulce de leche", descripcion="Dulce de leche argentino"),
+        Ingrediente(nombre="Cacao", descripcion="Cacao en polvo"),
+        Ingrediente(nombre="Hielo", descripcion="Cubos de hielo"),
+        Ingrediente(nombre="Harina", descripcion="Harina de trigo", es_alergeno=True),
+        Ingrediente(nombre="Mantequilla", descripcion="Mantequilla sin sal"),
+        Ingrediente(nombre="Huevo", descripcion="Huevo de gallina", es_alergeno=True),
+    ]
+    session.add_all(items)
+    session.flush()
 
 
-if __name__ == "__main__":
-    seed()
+def _seed_productos(session: Session):
+    # Reemplazar productos placeholder si existen
+    existing = session.exec(select(Producto).limit(1)).first()
+    if existing:
+        old_products = {"Pan Francés", "Pastel de Chocolate", "Leche Entera 1L"}
+        if existing.nombre in old_products:
+            # Limpiar relaciones primero
+            for pc in session.exec(select(ProductoCategoria)).all():
+                session.delete(pc)
+            for pi in session.exec(select(ProductoIngrediente)).all():
+                session.delete(pi)
+            for p in session.exec(select(Producto)).all():
+                session.delete(p)
+            session.flush()
+        else:
+            return
+
+    u = session.exec(select(UnidadMedida).where(UnidadMedida.simbolo == "u")).first()
+    g = session.exec(select(UnidadMedida).where(UnidadMedida.simbolo == "g")).first()
+    kg = session.exec(select(UnidadMedida).where(UnidadMedida.simbolo == "kg")).first()
+
+    cafes_cat = session.exec(select(Categoria).where(Categoria.nombre == "Cafés")).first()
+    bebidas_cat = session.exec(select(Categoria).where(Categoria.nombre == "Bebidas")).first()
+    pasteleria_cat = session.exec(select(Categoria).where(Categoria.nombre == "Pastelería")).first()
+
+    cafe_grano = session.exec(select(Ingrediente).where(Ingrediente.nombre == "Café en grano")).first()
+    leche = session.exec(select(Ingrediente).where(Ingrediente.nombre == "Leche")).first()
+    dlc = session.exec(select(Ingrediente).where(Ingrediente.nombre == "Dulce de leche")).first()
+    cacao = session.exec(select(Ingrediente).where(Ingrediente.nombre == "Cacao")).first()
+    hielo = session.exec(select(Ingrediente).where(Ingrediente.nombre == "Hielo")).first()
+    harina = session.exec(select(Ingrediente).where(Ingrediente.nombre == "Harina")).first()
+    mantequilla = session.exec(select(Ingrediente).where(Ingrediente.nombre == "Mantequilla")).first()
+    huevo = session.exec(select(Ingrediente).where(Ingrediente.nombre == "Huevo")).first()
+
+    # ── Productos ──────────────────────────────────────────
+    cafe_granos = Producto(
+        nombre="Café en granos",
+        descripcion="Café de especialidad tostado artesanalmente. Bolsa de 250g de granos seleccionados.",
+        precio_base=4500.00, stock_cantidad=30, disponible=True, unidad_venta_id=u.id,
+        imagenes_url=[
+            "https://thumbs.dreamstime.com/b/bolsitas-de-caf%C3%A9-generaci%C3%B3n-ia-los-granos-marr%C3%B3n-forman-un-fondo-denso-con-una-bolsa-papel-colocada-centralmente-en-la-parte-400978427.jpg"
+        ],
+    )
+    expresso = Producto(
+        nombre="Expresso cortado 120 ml",
+        descripcion="Café expresso cortado con un toque de leche. Intenso y suave a la vez.",
+        precio_base=1800.00, stock_cantidad=50, disponible=True, unidad_venta_id=u.id,
+        imagenes_url=[
+            "https://pedidosya.dhmedia.io/image/pedidosya/products/a9d7f79d-be5d-48d0-a45d-77ff453e84ae.jpg?quality=90&width=864&dpi=1.5"
+        ],
+    )
+    ice_latte = Producto(
+        nombre="Ice latte 350 ml",
+        descripcion="Latte frío con hielo, perfecto para los días calurosos. Suave y refrescante.",
+        precio_base=2800.00, stock_cantidad=40, disponible=True, unidad_venta_id=u.id,
+        imagenes_url=[
+            "https://pedidosya.dhmedia.io/image/pedidosya/products/88483610-7726-4ddf-8af0-1f10869d49f7.jpg?quality=90&width=1008&webp=1"
+        ],
+    )
+    mokaccino = Producto(
+        nombre="Mokaccino 350 ml",
+        descripcion="Café con chocolate y leche. Una combinación irresistible.",
+        precio_base=3000.00, stock_cantidad=40, disponible=True, unidad_venta_id=u.id,
+        imagenes_url=[
+            "https://pedidosya.dhmedia.io/image/pedidosya/products/94946615-5b77-4ee9-93b0-845594b7a220.jpg?quality=90&width=1008&webp=1"
+        ],
+    )
+    latte = Producto(
+        nombre="Latte 350 ml",
+        descripcion="Clásico latte con café espresso y leche cremosa. Suave y equilibrado.",
+        precio_base=2600.00, stock_cantidad=50, disponible=True, unidad_venta_id=u.id,
+        imagenes_url=[
+            "https://pedidosya.dhmedia.io/image/pedidosya/products/0d0b91c7-fdd9-4bfe-a24d-7e3754c5fdf4.jpg?quality=90&width=1008&webp=1"
+        ],
+    )
+    croissant = Producto(
+        nombre="Croissant de dulce de leche x2",
+        descripcion="Croissant artesanal relleno de dulce de leche. Dos unidades.",
+        precio_base=2200.00, stock_cantidad=25, disponible=True, unidad_venta_id=u.id,
+        imagenes_url=[
+            "https://pedidosya.dhmedia.io/image/pedidosya/products/51a450b9-7898-49f5-ab10-3df50209246c.jpg?quality=90&width=1008"
+        ],
+    )
+
+    session.add_all([cafe_granos, expresso, ice_latte, mokaccino, latte, croissant])
+    session.flush()
+
+    # ── Categorías ─────────────────────────────────────────
+    session.add_all([
+        ProductoCategoria(producto_id=cafe_granos.id, categoria_id=cafes_cat.id, es_principal=True),
+        ProductoCategoria(producto_id=expresso.id, categoria_id=cafes_cat.id, es_principal=True),
+        ProductoCategoria(producto_id=mokaccino.id, categoria_id=cafes_cat.id, es_principal=True),
+        ProductoCategoria(producto_id=latte.id, categoria_id=cafes_cat.id, es_principal=True),
+        ProductoCategoria(producto_id=ice_latte.id, categoria_id=bebidas_cat.id, es_principal=True),
+        ProductoCategoria(producto_id=croissant.id, categoria_id=pasteleria_cat.id, es_principal=True),
+    ])
+
+    # ── Ingredientes ───────────────────────────────────────
+    session.add_all([
+        ProductoIngrediente(producto_id=cafe_granos.id, ingrediente_id=cafe_grano.id, cantidad=250.000, unidad_medida_id=g.id, es_removible=False),
+        ProductoIngrediente(producto_id=expresso.id, ingrediente_id=cafe_grano.id, cantidad=18.000, unidad_medida_id=g.id, es_removible=False),
+        ProductoIngrediente(producto_id=expresso.id, ingrediente_id=leche.id, cantidad=30.000, unidad_medida_id=g.id, es_removible=False),
+        ProductoIngrediente(producto_id=ice_latte.id, ingrediente_id=cafe_grano.id, cantidad=18.000, unidad_medida_id=g.id, es_removible=False),
+        ProductoIngrediente(producto_id=ice_latte.id, ingrediente_id=leche.id, cantidad=200.000, unidad_medida_id=g.id, es_removible=True),
+        ProductoIngrediente(producto_id=ice_latte.id, ingrediente_id=hielo.id, cantidad=6.000, unidad_medida_id=u.id, es_removible=False),
+        ProductoIngrediente(producto_id=mokaccino.id, ingrediente_id=cafe_grano.id, cantidad=18.000, unidad_medida_id=g.id, es_removible=False),
+        ProductoIngrediente(producto_id=mokaccino.id, ingrediente_id=leche.id, cantidad=200.000, unidad_medida_id=g.id, es_removible=True),
+        ProductoIngrediente(producto_id=mokaccino.id, ingrediente_id=cacao.id, cantidad=15.000, unidad_medida_id=g.id, es_removible=False),
+        ProductoIngrediente(producto_id=latte.id, ingrediente_id=cafe_grano.id, cantidad=18.000, unidad_medida_id=g.id, es_removible=False),
+        ProductoIngrediente(producto_id=latte.id, ingrediente_id=leche.id, cantidad=200.000, unidad_medida_id=g.id, es_removible=True),
+        ProductoIngrediente(producto_id=croissant.id, ingrediente_id=harina.id, cantidad=100.000, unidad_medida_id=g.id, es_removible=False),
+        ProductoIngrediente(producto_id=croissant.id, ingrediente_id=mantequilla.id, cantidad=50.000, unidad_medida_id=g.id, es_removible=False),
+        ProductoIngrediente(producto_id=croissant.id, ingrediente_id=dlc.id, cantidad=40.000, unidad_medida_id=g.id, es_removible=False),
+        ProductoIngrediente(producto_id=croissant.id, ingrediente_id=huevo.id, cantidad=1.000, unidad_medida_id=u.id, es_removible=False),
+    ])
+
+
+def _seed_roles(session: Session):
+    if session.exec(select(Rol).limit(1)).first():
+        return
+    roles_data = [
+        ("ADMIN", "Administrador"),
+        ("STOCK", "Gestor de Stock"),
+        ("PEDIDOS", "Gestor de Pedidos"),
+        ("CLIENT", "Cliente"),
+    ]
+    for codigo, descripcion in roles_data:
+        session.add(Rol(codigo=codigo, descripcion=descripcion))
+    session.flush()
+
+
+def _seed_formas_pago(session: Session):
+    if session.exec(select(FormaPago).limit(1)).first():
+        return
+    for nombre in ["Efectivo", "Tarjeta de crédito", "Transferencia", "Mercado Pago"]:
+        session.add(FormaPago(nombre=nombre))
+    session.flush()
+
+
+def _seed_estados_pedido(session: Session):
+    if session.exec(select(EstadoPedido).limit(1)).first():
+        return
+    for codigo in ["PENDIENTE", "CONFIRMADO", "EN_PREP", "EN_CAMINO", "ENTREGADO", "CANCELADO"]:
+        session.add(EstadoPedido(codigo=codigo))
+    session.flush()
+
+
+def _seed_admin_user(session: Session):
+    if session.exec(select(Usuario).where(Usuario.email == "admin@store.com")).first():
+        return
+    admin = Usuario(
+        nombre="Admin",
+        email="admin@store.com",
+        password_hash=hash_password("admin1234"),
+    )
+    session.add(admin)
+    session.flush()
+    admin_rol = session.exec(select(Rol).where(Rol.codigo == "ADMIN")).first()
+    session.add(UsuarioRol(usuario_id=admin.id, rol_codigo=admin_rol.codigo))
+
+
+def run_seed(session: Session):
+    _seed_roles(session)
+    _seed_formas_pago(session)
+    _seed_estados_pedido(session)
+    _seed_admin_user(session)
+    _seed_unidades_medida(session)
+    _seed_categorias(session)
+    _seed_ingredientes(session)
+    _seed_productos(session)
+    session.commit()

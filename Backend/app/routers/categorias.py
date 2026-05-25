@@ -1,51 +1,54 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Annotated
+from typing import List, Optional
+from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
-
 from app.database import get_session
-from app.dependencies.auth import require_rol
+from app.core.uow import UnitOfWork
+from app.core.dependencies import require_role
 from app.schemas.categoria import CategoriaCreate, CategoriaRead, CategoriaUpdate
-from app.services import categoria_service
+from app.services.categoria_service import CategoriaService
 
-router = APIRouter(prefix="/categorias", tags=["Categorias"])
+router = APIRouter(prefix="/api/v1/categorias", tags=["Categorías"])
 
 
-@router.get("/", response_model=list[CategoriaRead])
+def get_service(session: Session = Depends(get_session)) -> CategoriaService:
+    uow = UnitOfWork(session)
+    return CategoriaService(uow)
+
+
+@router.get("", response_model=List[CategoriaRead])
 def listar_categorias(
-    session: Session = Depends(get_session),
-    skip: Annotated[int, Query(ge=0)] = 0,
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    q: Optional[str] = Query(None, description="Buscar por nombre"),
+    parent_id: Optional[int] = Query(None, description="Filtrar por categoría padre"),
+    service: CategoriaService = Depends(get_service),
 ):
-    return categoria_service.get_all(session, skip, limit)
+    return service.get_all(q=q, parent_id=parent_id)
 
 
-@router.post("/", response_model=CategoriaRead, status_code=201, dependencies=[Depends(require_rol("ADMIN"))])
-def crear_categoria(data: CategoriaCreate, session: Session = Depends(get_session)):
-    return categoria_service.create(session, data)
+@router.get("/{id}", response_model=CategoriaRead)
+def obtener_categoria(id: int, service: CategoriaService = Depends(get_service)):
+    return service.get_by_id(id)
 
 
-@router.get("/{item_id}", response_model=CategoriaRead)
-def obtener_categoria(item_id: int, session: Session = Depends(get_session)):
-    item = categoria_service.get_by_id(session, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Categoria no encontrada")
-    return item
+@router.post("", response_model=CategoriaRead, status_code=status.HTTP_201_CREATED)
+def crear_categoria(
+    data: CategoriaCreate,
+    service: CategoriaService = Depends(get_service),
+    _=Depends(require_role(["ADMIN"])),
+):
+    return service.create(data)
 
 
-@router.patch("/{item_id}", response_model=CategoriaRead, dependencies=[Depends(require_rol("ADMIN"))])
+@router.patch("/{id}", response_model=CategoriaRead)
 def actualizar_categoria(
-    item_id: int,
+    id: int,
     data: CategoriaUpdate,
-    session: Session = Depends(get_session),
+    service: CategoriaService = Depends(get_service),
+    _=Depends(require_role(["ADMIN"])),
 ):
-    item = categoria_service.update(session, item_id, data)
-    if not item:
-        raise HTTPException(status_code=404, detail="Categoria no encontrada")
-    return item
+    return service.update(id, data)
 
 
-@router.delete("/{item_id}", status_code=204, dependencies=[Depends(require_rol("ADMIN"))])
-def eliminar_categoria(item_id: int, session: Session = Depends(get_session)):
-    ok = categoria_service.delete(session, item_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Categoria no encontrada")
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_categoria(id: int, service: CategoriaService = Depends(get_service),
+    _=Depends(require_role(["ADMIN"])),):
+    service.delete(id)

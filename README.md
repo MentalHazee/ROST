@@ -1,49 +1,69 @@
-# Catálogo de Productos — Parcial UTN TUP
+# ROST Specialty Coffee
 
-Aplicación fullstack de catálogo de productos con categorías, ingredientes y unidades de medida.
+## Backend
 
-## Tecnologías
-
-**Backend:** FastAPI, SQLModel, PostgreSQL, pg8000, Pydantic, Uvicorn
-**Frontend:** React 18, TypeScript, Vite, TanStack Query v5, React Router DOM v6, Tailwind CSS v4, Axios
-
-## Requisitos
-
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL (local)
-
-## Ejecutar Backend
-
-```bash
+```powershell
 cd Backend
-.venv\Scripts\activate      # Windows
-source .venv/bin/activate   # Linux/Mac
+
+# Primera vez
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+
+# Ejecutar
 uvicorn app.main:app --reload
 ```
 
-API en http://localhost:8000 — Docs: http://localhost:8000/docs
+Backend: http://localhost:8000  
+Docs: http://localhost:8000/docs
 
-## Ejecutar Frontend
+---
 
-```bash
+## Frontend
+
+```powershell
 cd Frontend-admin
+
+# Primera vez
 pnpm install
-pnpm dev
+
+# Ejecutar
+pnpm run dev
 ```
 
-Frontend en http://localhost:5173
+Frontend: http://localhost:5173
 
-## Base de Datos
+---
 
-Crear la base de datos en PostgreSQL:
+## Base de datos
 
-```sql
-CREATE DATABASE catalogo_productos;
+Verificar PostgreSQL activo:
+
+```powershell
+Get-Service postgresql*
 ```
 
-La conexión se configura en `Backend/.env`:
+Crear base:
 
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -c "CREATE DATABASE parcial_db;"
 ```
-DATABASE_URL=postgresql+pg8000://postgres:1234@localhost:5432/catalogo_productos
 
+---
+
+## Ejecutar todo
+
+Terminal 1:
+
+```powershell
+cd Backend
+.venv\Scripts\activate
+uvicorn app.main:app --reload
+```
+
+Terminal 2:
+
+```powershell
+cd Frontend-admin
+pnpm run dev
+```

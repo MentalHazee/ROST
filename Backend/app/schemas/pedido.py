@@ -1,53 +1,54 @@
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, ConfigDict
 
 
-class DetallePedidoCreate(BaseModel):
+class DetallePedidoItem(BaseModel):
     producto_id: int
-    cantidad: int = Field(ge=1)
+    cantidad: int
 
 
 class PedidoCreate(BaseModel):
-    direccion_id: int
-    forma_pago_id: int
-    items: list[DetallePedidoCreate]
+    items: List[DetallePedidoItem]
+    direccion_entrega_id: Optional[int] = None
+    forma_pago_id: Optional[int] = None
+
+
+class PedidoUpdateEstado(BaseModel):
+    nuevo_estado: str
 
 
 class DetallePedidoRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     producto_id: int
     cantidad: int
-    precio_snapshot: float
+    precio_snapshot: Optional[Decimal] = None
     nombre_snapshot: str
-
-    model_config = {"from_attributes": True}
+    personalizacion: Optional[Dict[str, Any]] = None
 
 
 class HistorialEstadoRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     estado: str
     cambiado_por: int
-    notas: Optional[str]
-    fecha: datetime
-
-    model_config = {"from_attributes": True}
+    fecha: Optional[datetime] = None
 
 
 class PedidoRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     usuario_id: int
-    direccion_id: int
-    forma_pago_id: int
+    direccion_entrega_id: Optional[int] = None
+    forma_pago_id: Optional[int] = None
     estado_actual: str
-    total: float
-    notas: Optional[str]
-    created_at: datetime
-    detalles: list[DetallePedidoRead] = []
-
-    model_config = {"from_attributes": True}
-
-
-class EstadoUpdate(BaseModel):
-    estado: str
-    notas: Optional[str] = None
+    total: Optional[Decimal] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    detalles: List[DetallePedidoRead] = []
+    historial: List[HistorialEstadoRead] = []

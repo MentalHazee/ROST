@@ -1,19 +1,18 @@
-import axios from 'axios'
-import { BASE_URL } from './index'
+import axios from 'axios';
 
-const client = axios.create({
-  baseURL: BASE_URL,
+const api = axios.create({
+  baseURL: '/api/v1',
   withCredentials: true,
-})
+});
 
-client.interceptors.response.use(
+api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      window.location.href = '/login'
+    if (error.response?.status === 401 && !window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login';
     }
-    return Promise.reject(error)
+    return Promise.reject(error);
   }
-)
+);
 
-export default client
+export default api;

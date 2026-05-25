@@ -1,52 +1,54 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Annotated
+from typing import List, Optional
+from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
-
 from app.database import get_session
-from app.dependencies.auth import require_rol
+from app.core.uow import UnitOfWork
+from app.core.dependencies import require_role
 from app.schemas.ingrediente import IngredienteCreate, IngredienteRead, IngredienteUpdate
-from app.services import ingrediente_service
+from app.services.ingrediente_service import IngredienteService
 
-router = APIRouter(prefix="/ingredientes", tags=["Ingredientes"])
+router = APIRouter(prefix="/api/v1/ingredientes", tags=["Ingredientes"])
 
 
-@router.get("/", response_model=list[IngredienteRead])
+def get_service(session: Session = Depends(get_session)) -> IngredienteService:
+    uow = UnitOfWork(session)
+    return IngredienteService(uow)
+
+
+@router.get("", response_model=List[IngredienteRead])
 def listar_ingredientes(
-    session: Session = Depends(get_session),
-    skip: Annotated[int, Query(ge=0, description="Registros a omitir")] = 0,
-    limit: Annotated[int, Query(ge=1, le=100, description="Max registros")] = 20,
-    es_alergeno: Annotated[bool | None, Query(description="Filtrar por alergeno")] = None,
+    q: Optional[str] = Query(None, description="Buscar por nombre"),
+    es_alergeno: Optional[bool] = Query(None, description="Filtrar por alérgeno"),
+    service: IngredienteService = Depends(get_service),
 ):
-    return ingrediente_service.get_all(session, skip, limit, es_alergeno)
+    return service.get_all(q=q, es_alergeno=es_alergeno)
 
 
-@router.post("/", response_model=IngredienteRead, status_code=201, dependencies=[Depends(require_rol("ADMIN"))])
-def crear_ingrediente(data: IngredienteCreate, session: Session = Depends(get_session)):
-    return ingrediente_service.create(session, data)
+@router.get("/{id}", response_model=IngredienteRead)
+def obtener_ingrediente(id: int, service: IngredienteService = Depends(get_service)):
+    return service.get_by_id(id)
 
 
-@router.get("/{item_id}", response_model=IngredienteRead)
-def obtener_ingrediente(item_id: int, session: Session = Depends(get_session)):
-    item = ingrediente_service.get_by_id(session, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Ingrediente no encontrado")
-    return item
+@router.post("", response_model=IngredienteRead, status_code=status.HTTP_201_CREATED)
+def crear_ingrediente(
+    data: IngredienteCreate,
+    service: IngredienteService = Depends(get_service),
+    _=Depends(require_role(["ADMIN"])),
+):
+    return service.create(data)
 
 
-@router.patch("/{item_id}", response_model=IngredienteRead, dependencies=[Depends(require_rol("ADMIN"))])
+@router.patch("/{id}", response_model=IngredienteRead)
 def actualizar_ingrediente(
-    item_id: int,
+    id: int,
     data: IngredienteUpdate,
-    session: Session = Depends(get_session),
+    service: IngredienteService = Depends(get_service),
+    _=Depends(require_role(["ADMIN"])),
 ):
-    item = ingrediente_service.update(session, item_id, data)
-    if not item:
-        raise HTTPException(status_code=404, detail="Ingrediente no encontrado")
-    return item
+    return service.update(id, data)
 
 
-@router.delete("/{item_id}", status_code=204, dependencies=[Depends(require_rol("ADMIN"))])
-def eliminar_ingrediente(item_id: int, session: Session = Depends(get_session)):
-    ok = ingrediente_service.delete(session, item_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Ingrediente no encontrado")
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_ingrediente(id: int, service: IngredienteService = Depends(get_service),
+    _=Depends(require_role(["ADMIN"])),):
+    service.delete(id)

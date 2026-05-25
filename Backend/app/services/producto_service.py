@@ -1,106 +1,144 @@
+from datetime import datetime, timezone
+from typing import List, Optional
 from sqlmodel import Session, select
-from typing import Optional
-from datetime import datetime
-
+from sqlalchemy.orm import selectinload
+from app.core.uow import UnitOfWork
 from app.models.producto import Producto
 from app.models.producto_categoria import ProductoCategoria
 from app.models.producto_ingrediente import ProductoIngrediente
 from app.schemas.producto import ProductoCreate, ProductoUpdate
+from app.services.base import BaseService
 
 
-def get_all(session: Session, skip: int, limit: int,
-            disponible: Optional[bool] = None) -> list[Producto]:
-    query = select(Producto).where(Producto.deleted_at.is_(None))
-    if disponible is not None:
-        query = query.where(Producto.disponible == disponible)
-    return session.exec(query.offset(skip).limit(limit)).all()
+# Opciones de eager loading reutilizables para producto
+_producto_loads = (
+    selectinload(Producto.productos_categoria).selectinload(ProductoCategoria.categoria),
+    selectinload(Producto.productos_ingredientes).selectinload(ProductoIngrediente.ingrediente),
+    selectinload(Producto.productos_ingredientes).selectinload(ProductoIngrediente.unidad_medida),
+    selectinload(Producto.unidad_venta),
+)
 
 
-def get_by_id(session: Session, item_id: int) -> Optional[Producto]:
-    return session.get(Producto, item_id)
+class ProductoService(BaseService[Producto, ProductoCreate, ProductoUpdate]):
+    def __init__(self, uow: UnitOfWork):
+        super().__init__(uow, Producto)
 
+    def get_all(
+        self,
+        q: Optional[str] = None,
+        categoria_id: Optional[int] = None,
+        disponible: Optional[bool] = None,
+    ) -> List[Producto]:
+        session: Session = self.uow.session
+        stmt = (
+            select(Producto)
+            .where(Producto.deleted_at.is_(None))
+            .options(*_producto_loads)
+        )
+        if q:
+            stmt = stmt.where(Producto.nombre.ilike(f"%{q}%"))
+        if disponible is not None:
+            stmt = stmt.where(Producto.disponible == disponible)
+        if categoria_id is not None:
+            stmt = stmt.join(ProductoCategoria).where(
+                ProductoCategoria.categoria_id == categoria_id
+            )
+        result = session.exec(stmt).all()
+        return list(result)
 
-def create(session: Session, data: ProductoCreate) -> Producto:
-    item = Producto.model_validate(data)
-    session.add(item)
-    session.commit()
-    session.refresh(item)
-    return item
+    def get_by_id(self, id: int) -> Producto:
+        session: Session = self.uow.session
+        obj = session.exec(
+            select(Producto)
+            .where(Producto.id == id, Producto.deleted_at.is_(None))
+            .options(*_producto_loads)
+        ).first()
+        if not obj:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Producto not found")
+        return obj
 
+    def create(self, schema: ProductoCreate) -> Producto:
+        session: Session = self.uow.session
+        data = schema.model_dump(exclude={"categorias", "ingredientes"}, exclude_unset=False)
+        # Si stock es 0, forzar no disponible
+        stock = data.get("stock_cantidad", 0)
+        if stock is not None and stock == 0:
+            data["disponible"] = False
+        producto = Producto(**data)
+        session.add(producto)
+        session.flush()
 
-def update(session: Session, item_id: int, data: ProductoUpdate) -> Optional[Producto]:
-    item = session.get(Producto, item_id)
-    if not item:
-        return None
-    update_data = data.model_dump(exclude_unset=True)
-    update_data["updated_at"] = datetime.utcnow()
-    for key, value in update_data.items():
-        setattr(item, key, value)
-    session.add(item)
-    session.commit()
-    session.refresh(item)
-    return item
+        if schema.categorias:
+            for cat_id in schema.categorias:
+                pc = ProductoCategoria(producto_id=producto.id, categoria_id=cat_id)
+                session.add(pc)
 
+        if schema.ingredientes:
+            for ing_data in schema.ingredientes:
+                pi = ProductoIngrediente(
+                    producto_id=producto.id,
+                    ingrediente_id=ing_data["ingrediente_id"],
+                    cantidad=ing_data.get("cantidad"),
+                    unidad_medida_id=ing_data["unidad_medida_id"],
+                    es_removible=ing_data.get("es_removible", False),
+                )
+                session.add(pi)
 
-def delete(session: Session, item_id: int) -> bool:
-    item = session.get(Producto, item_id)
-    if not item:
-        return False
-    item.deleted_at = datetime.utcnow()
-    item.updated_at = datetime.utcnow()
-    session.add(item)
-    session.commit()
-    return True
+        session.flush()
+        session.refresh(producto)
+        self.uow.commit()
+        return producto
 
+    def update(self, id: int, schema: ProductoUpdate) -> Producto:
+        session: Session = self.uow.session
+        obj = self.get_by_id(id)
 
-def add_categoria(session: Session, producto_id: int, categoria_id: int,
-                  es_principal: bool = False) -> Optional[ProductoCategoria]:
-    existing = session.get(ProductoCategoria, (producto_id, categoria_id))
-    if existing:
-        return None
-    link = ProductoCategoria(
-        producto_id=producto_id,
-        categoria_id=categoria_id,
-        es_principal=es_principal,
-    )
-    session.add(link)
-    session.commit()
-    session.refresh(link)
-    return link
+        data = schema.model_dump(exclude={"categorias", "ingredientes"}, exclude_unset=True)
+        for key, value in data.items():
+            setattr(obj, key, value)
+        # Si stock llegó a 0, forzar no disponible
+        if "stock_cantidad" in data and data["stock_cantidad"] is not None and data["stock_cantidad"] == 0:
+            obj.disponible = False
+        obj.updated_at = datetime.now(timezone.utc)
+        session.add(obj)
+        session.flush()
 
+        if schema.categorias is not None:
+            existing = session.exec(
+                select(ProductoCategoria).where(ProductoCategoria.producto_id == id)
+            ).all()
+            for pc in existing:
+                session.delete(pc)
+            for cat_id in schema.categorias:
+                pc = ProductoCategoria(producto_id=id, categoria_id=cat_id)
+                session.add(pc)
 
-def remove_categoria(session: Session, producto_id: int, categoria_id: int) -> bool:
-    link = session.get(ProductoCategoria, (producto_id, categoria_id))
-    if not link:
-        return False
-    session.delete(link)
-    session.commit()
-    return True
+        if schema.ingredientes is not None:
+            existing_ing = session.exec(
+                select(ProductoIngrediente).where(ProductoIngrediente.producto_id == id)
+            ).all()
+            for pi in existing_ing:
+                session.delete(pi)
+            for ing_data in schema.ingredientes:
+                pi = ProductoIngrediente(
+                    producto_id=id,
+                    ingrediente_id=ing_data["ingrediente_id"],
+                    cantidad=ing_data.get("cantidad"),
+                    unidad_medida_id=ing_data["unidad_medida_id"],
+                    es_removible=ing_data.get("es_removible", False),
+                )
+                session.add(pi)
 
+        session.flush()
+        session.refresh(obj)
+        self.uow.commit()
+        return obj
 
-def add_ingrediente(session: Session, producto_id: int, ingrediente_id: int,
-                    cantidad: float, unidad_medida_id: int,
-                    es_removible: bool = False) -> Optional[ProductoIngrediente]:
-    existing = session.get(ProductoIngrediente, (producto_id, ingrediente_id))
-    if existing:
-        return None
-    link = ProductoIngrediente(
-        producto_id=producto_id,
-        ingrediente_id=ingrediente_id,
-        cantidad=cantidad,
-        unidad_medida_id=unidad_medida_id,
-        es_removible=es_removible,
-    )
-    session.add(link)
-    session.commit()
-    session.refresh(link)
-    return link
-
-
-def remove_ingrediente(session: Session, producto_id: int, ingrediente_id: int) -> bool:
-    link = session.get(ProductoIngrediente, (producto_id, ingrediente_id))
-    if not link:
-        return False
-    session.delete(link)
-    session.commit()
-    return True
+    def delete(self, id: int) -> None:
+        session: Session = self.uow.session
+        obj = self.get_by_id(id)
+        obj.deleted_at = datetime.now(timezone.utc)
+        session.add(obj)
+        session.flush()
+        self.uow.commit()

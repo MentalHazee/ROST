@@ -1,26 +1,34 @@
-import client from './client'
-import type { Categoria, CategoriaCreate, CategoriaUpdate } from '../types/categoria'
+import api from './client';
+import type { Categoria, CategoriaCreate, CategoriaUpdate } from '../types';
 
-export async function getCategorias(): Promise<Categoria[]> {
-  const { data } = await client.get<Categoria[]>('/categorias')
-  return data
+interface GetCategoriasParams {
+  q?: string;
+  parent_id?: number | null;
 }
 
-export async function getCategoria(id: number): Promise<Categoria> {
-  const { data } = await client.get<Categoria>(`/categorias/${id}`)
-  return data
+export async function getCategorias(params?: GetCategoriasParams): Promise<Categoria[]> {
+  const query: Record<string, string> = {};
+  if (params?.q) query.q = params.q;
+  if (params?.parent_id !== undefined && params?.parent_id !== null) query.parent_id = String(params.parent_id);
+  const res = await api.get<Categoria[]>('/categorias', { params: query });
+  return res.data;
 }
 
-export async function createCategoria(payload: CategoriaCreate): Promise<Categoria> {
-  const { data } = await client.post<Categoria>('/categorias', payload)
-  return data
+export async function getCategoriaById(id: number): Promise<Categoria> {
+  const res = await api.get<Categoria>(`/categorias/${id}`);
+  return res.data;
 }
 
-export async function updateCategoria(id: number, payload: CategoriaUpdate): Promise<Categoria> {
-  const { data } = await client.patch<Categoria>(`/categorias/${id}`, payload)
-  return data
+export async function createCategoria(data: CategoriaCreate): Promise<Categoria> {
+  const res = await api.post<Categoria>('/categorias', data);
+  return res.data;
+}
+
+export async function updateCategoria(id: number, data: CategoriaUpdate): Promise<Categoria> {
+  const res = await api.patch<Categoria>(`/categorias/${id}`, data);
+  return res.data;
 }
 
 export async function deleteCategoria(id: number): Promise<void> {
-  await client.delete(`/categorias/${id}`)
+  await api.delete(`/categorias/${id}`);
 }

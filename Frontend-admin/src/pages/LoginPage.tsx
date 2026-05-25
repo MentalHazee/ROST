@@ -1,68 +1,95 @@
-import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { UtensilsCrossed } from 'lucide-react'
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
-  const { login } = useAuth()
-  const navigate = useNavigate()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
-  const loginMutation = useMutation({
-    mutationFn: () => login(email, password),
-    onSuccess: () => navigate('/'),
-  })
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await login(email, password);
+      navigate('/admin');
+    } catch {
+      setError('Email o contraseña incorrectos');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#FFF8F3] flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-lg p-8 w-full max-w-sm">
-        <div className="flex flex-col items-center mb-8">
-          <div className="bg-[#4D6080] p-4 rounded-2xl mb-4">
-            <UtensilsCrossed size={28} className="text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-800">ROST</h1>
-          <p className="text-sm text-gray-400 mt-1">Panel de administracion</p>
+    <div className="min-h-screen flex items-center justify-center bg-[#FFEDDB]">
+      <div className="bg-surface-container-lowest rounded-xl shadow-[0_10px_20px_-5px_rgba(77,96,128,0.08)] p-10 border border-outline-variant/10 w-full max-w-[440px]">
+        <div className="text-center mb-8">
+          <img src="/logo.png" alt="ROST" className="h-14 mx-auto mb-6" />
+          <h2 className="font-headline text-2xl font-bold text-primary">Panel de Control</h2>
+          <p className="font-body text-on-surface-variant text-sm mt-1">Accede a la gestión de especialidad</p>
         </div>
 
-        <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#4D6080] focus:border-transparent bg-[#FFF8F3]"
-              placeholder="admin@store.com"
-            />
+            <label className="block font-body text-xs font-semibold text-on-surface-variant uppercase tracking-[0.08em] mb-1.5">
+              Email
+            </label>
+            <div className="relative">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full bg-[#F5E6D3] border border-outline-variant rounded-lg pl-5 pr-4 py-3 text-on-surface font-body text-sm placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary-container"
+                placeholder="Tu email"
+              />
+            </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contrasena</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#4D6080] focus:border-transparent bg-[#FFF8F3]"
-              placeholder="••••••••"
-            />
+            <label className="block font-body text-xs font-semibold text-on-surface-variant uppercase tracking-[0.08em] mb-1.5">
+              Contraseña
+            </label>
+            <div className="relative">
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full bg-[#F5E6D3] border border-outline-variant rounded-lg pl-5 pr-4 py-3 text-on-surface font-body text-sm placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary-container"
+                placeholder="••••••••"
+              />
+            </div>
           </div>
+          {error && (
+            <div className="flex items-center gap-2 bg-error-container text-on-error-container px-4 py-3 rounded-lg text-sm font-body">
+              <span className="material-symbols-outlined text-[18px]">error</span>
+              {error}
+            </div>
+          )}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-[#4d6080] text-[#ffffff] py-4 rounded-lg font-body font-semibold uppercase tracking-[0.1em] text-sm hover:opacity-90 transition-all disabled:opacity-50"
+          >
+            {loading ? 'Ingresando...' : 'Ingresar'}
+          </button>
+          <div className="text-center">
+            <a href="#" className="font-body text-xs text-primary hover:text-primary-container transition-colors">
+              Recuperar contraseña
+            </a>
+          </div>
+        </form>
+
+        <div className="flex items-center gap-3 mt-8">
+          <div className="flex-1 h-px bg-outline-variant/30" />
+          <span className="font-body text-[11px] text-on-surface-variant/50 uppercase tracking-[0.15em]">Acceso Protegido</span>
+          <div className="flex-1 h-px bg-outline-variant/30" />
         </div>
-
-        {loginMutation.isError && (
-          <p className="text-red-500 text-sm mt-4 bg-red-50 px-3 py-2 rounded-xl">
-            Credenciales incorrectas
-          </p>
-        )}
-
-        <button
-          onClick={() => loginMutation.mutate()}
-          disabled={loginMutation.isPending || !email || !password}
-          className="w-full mt-6 bg-[#4D6080] text-white py-3 rounded-xl font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loginMutation.isPending ? 'Ingresando...' : 'Ingresar'}
-        </button>
       </div>
     </div>
-  )
+  );
 }

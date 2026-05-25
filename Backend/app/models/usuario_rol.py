@@ -1,23 +1,25 @@
-from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, TYPE_CHECKING
 from datetime import datetime
+from sqlmodel import SQLModel, Field, Relationship, Column, DateTime, func
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from .usuario import Usuario
-    from .rol import Rol
+    from app.models.usuario import Usuario
+    from app.models.rol import Rol
 
 
 class UsuarioRol(SQLModel, table=True):
-    __tablename__ = "usuariorol"
+    __tablename__ = "usuarios_roles"
 
-    usuario_id: int = Field(foreign_key="usuario.id", primary_key=True)
-    rol_codigo: str = Field(foreign_key="rol.codigo", primary_key=True)
-    asignado_por_id: Optional[int] = Field(default=None, foreign_key="usuario.id")
-    expires_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-    usuario: Optional["Usuario"] = Relationship(
-        back_populates="roles",
-        sa_relationship_kwargs={"foreign_keys": "[UsuarioRol.usuario_id]"}
+    usuario_id: Optional[int] = Field(
+        default=None, foreign_key="usuarios.id", primary_key=True
     )
-    rol: Optional["Rol"] = Relationship(back_populates="usuario_links")
+    rol_codigo: Optional[str] = Field(
+        default=None, foreign_key="roles.codigo", primary_key=True, max_length=20
+    )
+    created_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), server_default=func.now()),
+    )
+
+    usuario: "Usuario" = Relationship(back_populates="roles")
+    rol: "Rol" = Relationship()

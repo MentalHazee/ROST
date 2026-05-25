@@ -1,46 +1,50 @@
-from sqlmodel import Session, select
-from typing import Optional
-from datetime import datetime
-
+from datetime import datetime, timezone
+from typing import List, Optional
+from sqlmodel import Session, select, or_
+from app.core.uow import UnitOfWork
 from app.models.categoria import Categoria
 from app.schemas.categoria import CategoriaCreate, CategoriaUpdate
+from app.services.base import BaseService
 
 
-def get_all(session: Session, skip: int, limit: int) -> list[Categoria]:
-    query = select(Categoria)
-    return session.exec(query.offset(skip).limit(limit)).all()
+class CategoriaService(BaseService[Categoria, CategoriaCreate, CategoriaUpdate]):
+    def __init__(self, uow: UnitOfWork):
+        super().__init__(uow, Categoria)
 
+    def get_all(self, q: Optional[str] = None, parent_id: Optional[int] = None) -> List[Categoria]:
+        session: Session = self.uow.session
+        stmt = select(Categoria).where(Categoria.deleted_at.is_(None))
+        if q:
+            stmt = stmt.where(Categoria.nombre.ilike(f"%{q}%"))
+        if parent_id is not None:
+            stmt = stmt.where(Categoria.parent_id == parent_id)
+        result = session.exec(stmt).all()
+        return list(result)
 
-def get_by_id(session: Session, item_id: int) -> Optional[Categoria]:
-    return session.get(Categoria, item_id)
+    def get_by_id(self, id: int) -> Categoria:
+        obj = super().get_by_id(id)
+        if obj.deleted_at is not None:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Categoria not found")
+        return obj
 
+    def update(self, id: int, schema: CategoriaUpdate) -> Categoria:
+        session: Session = self.uow.session
+        obj = self.get_by_id(id)
+        data = schema.model_dump(exclude_unset=True)
+        for key, value in data.items():
+            setattr(obj, key, value)
+        obj.updated_at = datetime.now(timezone.utc)
+        session.add(obj)
+        session.flush()
+        session.refresh(obj)
+        self.uow.commit()
+        return obj
 
-def create(session: Session, data: CategoriaCreate) -> Categoria:
-    item = Categoria.model_validate(data)
-    session.add(item)
-    session.commit()
-    session.refresh(item)
-    return item
-
-
-def update(session: Session, item_id: int, data: CategoriaUpdate) -> Optional[Categoria]:
-    item = session.get(Categoria, item_id)
-    if not item:
-        return None
-    update_data = data.model_dump(exclude_unset=True)
-    update_data["updated_at"] = datetime.utcnow()
-    for key, value in update_data.items():
-        setattr(item, key, value)
-    session.add(item)
-    session.commit()
-    session.refresh(item)
-    return item
-
-
-def delete(session: Session, item_id: int) -> bool:
-    item = session.get(Categoria, item_id)
-    if not item:
-        return False
-    session.delete(item)
-    session.commit()
-    return True
+    def delete(self, id: int) -> None:
+        session: Session = self.uow.session
+        obj = self.get_by_id(id)
+        obj.deleted_at = datetime.now(timezone.utc)
+        session.add(obj)
+        session.flush()
+        self.uow.commit()

@@ -1,19 +1,21 @@
-from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, TYPE_CHECKING
 from datetime import datetime
+from sqlmodel import SQLModel, Field, Relationship, Column, DateTime, func
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from .pedido import Pedido
+    from app.models.pedido import Pedido
 
 
 class HistorialEstadoPedido(SQLModel, table=True):
-    __tablename__ = "historialestadopedido"
+    __tablename__ = "historial_estados_pedido"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    pedido_id: int = Field(foreign_key="pedido.id")
-    estado: str = Field(max_length=20)
-    cambiado_por: int = Field(foreign_key="usuario.id")
-    notas: Optional[str] = None
-    fecha: datetime = Field(default_factory=datetime.utcnow)
+    pedido_id: int = Field(foreign_key="pedidos.id", nullable=False)
+    estado: str = Field(max_length=20, nullable=False)
+    cambiado_por: int = Field(nullable=False)
+    fecha: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), server_default=func.now()),
+    )
 
-    pedido: Optional["Pedido"] = Relationship(back_populates="historial")
+    pedido: "Pedido" = Relationship(back_populates="historial")

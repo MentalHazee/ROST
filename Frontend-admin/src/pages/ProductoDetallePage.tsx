@@ -1,286 +1,139 @@
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Coffee, ShoppingBag, Package, Plus, X, Star } from 'lucide-react'
-import { getProducto, addCategoriaAProducto, removeCategoriaDeProducto, addIngredienteAProducto, removeIngredienteDeProducto } from '../api/productos'
-import { getCategorias } from '../api/categorias'
-import { getIngredientes } from '../api/ingredientes'
-import { getUnidadesMedida } from '../api/unidades_medida'
+import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { getProductoById } from '../api/productos';
 
 export default function ProductoDetallePage() {
-  const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const productoId = Number(id)
-
-  const [catId, setCatId] = useState('')
-  const [esPrincipal, setEsPrincipal] = useState(false)
-  const [ingId, setIngId] = useState('')
-  const [cantidad, setCantidad] = useState('')
-  const [unidadId, setUnidadId] = useState('')
-  const [esRemovible, setEsRemovible] = useState(false)
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const productoId = parseInt(id ?? '0', 10);
 
   const { data: producto, isLoading, isError } = useQuery({
-    queryKey: ['productos', id],
-    queryFn: () => getProducto(productoId),
-    enabled: !!id,
-  })
+    queryKey: ['producto', productoId],
+    queryFn: () => getProductoById(productoId),
+    enabled: !isNaN(productoId) && productoId > 0,
+  });
 
-  const { data: categorias } = useQuery({
-    queryKey: ['categorias'],
-    queryFn: getCategorias,
-  })
-
-  const { data: ingredientes } = useQuery({
-    queryKey: ['ingredientes'],
-    queryFn: getIngredientes,
-  })
-
-  const { data: unidades } = useQuery({
-    queryKey: ['unidades-medida'],
-    queryFn: getUnidadesMedida,
-  })
-
-  const addCatMutation = useMutation({
-    mutationFn: () => addCategoriaAProducto(productoId, { categoria_id: Number(catId), es_principal: esPrincipal }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['productos', id] })
-      setCatId('')
-      setEsPrincipal(false)
-    },
-  })
-
-  const removeCatMutation = useMutation({
-    mutationFn: (categoriaId: number) => removeCategoriaDeProducto(productoId, categoriaId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['productos', id] }),
-  })
-
-  const addIngMutation = useMutation({
-    mutationFn: () => addIngredienteAProducto(productoId, {
-      ingrediente_id: Number(ingId),
-      cantidad: Number(cantidad),
-      unidad_medida_id: Number(unidadId),
-      es_removible: esRemovible,
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['productos', id] })
-      setIngId('')
-      setCantidad('')
-      setUnidadId('')
-      setEsRemovible(false)
-    },
-  })
-
-  const removeIngMutation = useMutation({
-    mutationFn: (ingredienteId: number) => removeIngredienteDeProducto(productoId, ingredienteId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['productos', id] }),
-  })
-
-  const categoriasDisponibles = categorias?.filter(
-    c => !producto?.categoria_links.some(l => l.categoria_id === c.id)
-  ) ?? []
-
-  const ingredientesDisponibles = ingredientes?.filter(
-    i => !producto?.ingrediente_links.some(l => l.ingrediente_id === i.id)
-  ) ?? []
-
-  if (isLoading) return <div className="p-8 text-center text-gray-400 text-lg">Cargando...</div>
-  if (isError || !producto) return (
-    <div className="p-8 text-center text-red-500">Producto no encontrado.</div>
-  )
+  if (isLoading) return <p className="text-on-surface-variant">Cargando producto...</p>;
+  if (isError || !producto) return <p className="text-error">Error al cargar el producto</p>;
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
+    <div className="max-w-3xl">
       <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-gray-400 hover:text-[#4D6080] transition text-sm font-medium"
+        onClick={() => navigate('/admin/productos')}
+        className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors mb-6 font-body"
       >
-        <ArrowLeft size={16} />
-        Volver
+        <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+        Volver a productos
       </button>
 
-      <div className="bg-white rounded-2xl shadow-sm p-8">
-        <div className="flex items-start gap-4 mb-6">
-          <div className="bg-[#FFF2E2] rounded-2xl p-4 shrink-0">
-            <Coffee size={32} className="text-[#4D6080]" />
+      <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/10 p-8">
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h2 className="font-headline text-2xl font-bold text-primary">{producto.nombre}</h2>
+            {producto.descripcion && (
+              <p className="font-body text-on-surface-variant mt-2">{producto.descripcion}</p>
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">{producto.nombre}</h1>
-            <p className="text-gray-400 mb-4">{producto.descripcion ?? 'Sin descripción'}</p>
-            <div className="flex items-center gap-4">
-              <span className="text-3xl font-bold text-[#4D6080]">${producto.precio_base.toFixed(2)}</span>
-              <span className={`px-4 py-1.5 rounded-full text-sm font-medium ${
-                producto.disponible ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
-              }`}>
-                {producto.disponible ? 'Disponible' : 'No disponible'}
+          <div className="flex items-center gap-2">
+            {producto.disponible ? (
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold uppercase tracking-wide">
+                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                Disponible
               </span>
-            </div>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold uppercase tracking-wide">
+                <span className="material-symbols-outlined text-[14px]">cancel</span>
+                No disponible
+              </span>
+            )}
+            {producto.stock_cantidad === 0 && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold uppercase tracking-wide">
+                <span className="material-symbols-outlined text-[14px]">inventory_2</span>
+                Sin stock
+              </span>
+            )}
           </div>
         </div>
-      </div>
 
-      <div className="bg-white rounded-2xl shadow-sm p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <ShoppingBag size={20} className="text-[#4D6080]" />
-          <h2 className="text-lg font-semibold text-gray-700">Categorías</h2>
-        </div>
-
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {producto.categoria_links.map(link => (
-            <div
-              key={link.categoria_id}
-              className="flex items-center gap-1.5 bg-[#FFF2E2] text-[#4D6080] px-4 py-2 rounded-xl text-sm font-medium"
-            >
-              <span>{link.categoria?.nombre ?? `ID ${link.categoria_id}`}</span>
-              {link.es_principal && <Star size={12} className="fill-current" />}
-              <button
-                onClick={() => removeCatMutation.mutate(link.categoria_id)}
-                className="ml-1 text-gray-400 hover:text-red-500 transition"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ))}
-          {producto.categoria_links.length === 0 && (
-            <span className="text-gray-300 text-sm">Sin categorías asignadas</span>
-          )}
-        </div>
-
-        <div className="flex gap-3 items-end">
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Agregar categoría</label>
-            <select
-              value={catId}
-              onChange={e => setCatId(e.target.value)}
-              className="w-full bg-[#FFF2E2] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#4D6080] focus:outline-none border-0"
-            >
-              <option value="">— Seleccionar —</option>
-              {categoriasDisponibles.map(c => (
-                <option key={c.id} value={c.id}>{c.nombre}</option>
-              ))}
-            </select>
+        <div className="grid grid-cols-2 gap-6 mb-8">
+          <div className="bg-surface-container-high rounded-lg p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-1">Precio Base</p>
+            <p className="font-headline text-xl font-bold text-primary">${producto.precio_base.toFixed(2)}</p>
           </div>
-          <div className="flex items-center gap-1.5 pb-2">
-            <input
-              id="esPrincipal"
-              type="checkbox"
-              checked={esPrincipal}
-              onChange={e => setEsPrincipal(e.target.checked)}
-              className="w-4 h-4 text-[#4D6080] rounded accent-[#4D6080]"
+          <div className="bg-surface-container-high rounded-lg p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-1">Stock</p>
+            <p className="font-headline text-xl font-bold text-primary">{producto.stock_cantidad} unid.</p>
+          </div>
+        </div>
+
+        {producto.imagenes_url && producto.imagenes_url.length > 0 && (
+          <div className="mb-8">
+            <img
+              src={producto.imagenes_url[0]}
+              alt={producto.nombre}
+              className="w-full max-h-80 object-cover rounded-lg"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
-            <label htmlFor="esPrincipal" className="text-xs text-gray-500">Principal</label>
           </div>
-          <button
-            onClick={() => addCatMutation.mutate()}
-            disabled={!catId || addCatMutation.isPending}
-            className="flex items-center gap-1.5 bg-[#4D6080] text-white px-5 py-3 rounded-2xl text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
-          >
-            <Plus size={16} />
-            {addCatMutation.isPending ? '...' : 'Agregar'}
-          </button>
-        </div>
-        {addCatMutation.isError && (
-          <p className="text-red-500 text-xs mt-2">Error al agregar categoría</p>
         )}
-      </div>
 
-      <div className="bg-white rounded-2xl shadow-sm p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <Package size={20} className="text-[#4D6080]" />
-          <h2 className="text-lg font-semibold text-gray-700">Ingredientes</h2>
-        </div>
-
-        <ul className="space-y-3 mb-6">
-          {producto.ingrediente_links.map(link => (
-            <li key={link.ingrediente_id} className="flex items-center gap-3 bg-[#FFF8F3] rounded-xl px-4 py-3 text-sm">
-              <span className="w-2 h-2 rounded-full bg-[#4D6080] shrink-0" />
-              <span className="font-medium text-gray-700">{link.ingrediente?.nombre ?? `ID ${link.ingrediente_id}`}</span>
-              <span className="text-gray-400">— {link.cantidad}</span>
-              {link.unidad_medida && (
-                <span className="text-gray-400">{link.unidad_medida.simbolo}</span>
-              )}
-              {link.es_removible && (
-                <span className="bg-yellow-50 text-yellow-700 px-2.5 py-0.5 rounded-full text-xs font-medium">removible</span>
-              )}
-              <button
-                onClick={() => removeIngMutation.mutate(link.ingrediente_id)}
-                className="ml-auto text-gray-400 hover:text-red-500 transition"
-              >
-                <X size={16} />
-              </button>
-            </li>
-          ))}
-          {producto.ingrediente_links.length === 0 && (
-            <span className="text-gray-300 text-sm">Sin ingredientes asignados</span>
-          )}
-        </ul>
-
-        <div className="grid grid-cols-4 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Ingrediente</label>
-            <select
-              value={ingId}
-              onChange={e => setIngId(e.target.value)}
-              className="w-full bg-[#FFF2E2] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#4D6080] focus:outline-none border-0"
-            >
-              <option value="">— Seleccionar —</option>
-              {ingredientesDisponibles.map(i => (
-                <option key={i.id} value={i.id}>{i.nombre}</option>
+        {producto.categorias && producto.categorias.length > 0 && (
+          <div className="mb-8">
+            <h3 className="font-body font-semibold text-sm text-on-surface mb-3">Categorías</h3>
+            <div className="flex flex-wrap gap-2">
+              {producto.categorias.map((pc) => (
+                <span key={pc.categoria_id} className="inline-flex items-center px-3 py-1 bg-secondary-container text-on-secondary-container rounded-full text-xs font-semibold">
+                  <span className="material-symbols-outlined text-[14px] mr-1">category</span>
+                  {pc.categoria?.nombre ?? `Categoría #${pc.categoria_id}`}
+                  {pc.es_principal && <span className="ml-1.5 px-1.5 py-0.5 bg-primary-container text-on-primary-container rounded text-[9px] uppercase font-bold tracking-wider">Principal</span>}
+                </span>
               ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Cantidad</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={cantidad}
-              onChange={e => setCantidad(e.target.value)}
-              className="w-full bg-[#FFF2E2] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#4D6080] focus:outline-none border-0"
-              placeholder="ej: 0.5"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">Unidad</label>
-            <select
-              value={unidadId}
-              onChange={e => setUnidadId(e.target.value)}
-              className="w-full bg-[#FFF2E2] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#4D6080] focus:outline-none border-0"
-            >
-              <option value="">— Seleccionar —</option>
-              {unidades?.map(u => (
-                <option key={u.id} value={u.id}>{u.nombre} ({u.simbolo})</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-end gap-2">
-            <div className="flex flex-col gap-1.5 pb-1">
-              <div className="flex items-center gap-1.5">
-                <input
-                  id="esRemovible"
-                  type="checkbox"
-                  checked={esRemovible}
-                  onChange={e => setEsRemovible(e.target.checked)}
-                  className="w-4 h-4 text-[#4D6080] rounded accent-[#4D6080]"
-                />
-                <label htmlFor="esRemovible" className="text-xs text-gray-500">Removible</label>
-              </div>
-              <button
-                onClick={() => addIngMutation.mutate()}
-                disabled={!ingId || !cantidad || !unidadId || addIngMutation.isPending}
-                className="flex items-center gap-1.5 bg-[#4D6080] text-white px-5 py-3 rounded-2xl text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
-              >
-                <Plus size={16} />
-                {addIngMutation.isPending ? '...' : 'Agregar'}
-              </button>
             </div>
           </div>
-        </div>
-        {addIngMutation.isError && (
-          <p className="text-red-500 text-xs mt-2">Error al agregar ingrediente</p>
+        )}
+
+        {producto.ingredientes && producto.ingredientes.length > 0 && (
+          <div>
+            <h3 className="font-body font-semibold text-sm text-on-surface mb-3 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px] text-primary">list_alt</span>
+              Ingredientes
+            </h3>
+            <div className="space-y-2">
+              {producto.ingredientes.map((pi) => (
+                <div key={pi.ingrediente_id} className="flex items-center justify-between bg-surface-container-high rounded-lg px-4 py-3 transition-colors hover:bg-surface-container-highest">
+                  <div className="flex items-center gap-3">
+                    <div className="w-7 h-7 rounded-full bg-primary-fixed flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[14px] text-primary">
+                        {pi.ingrediente?.es_alergeno ? 'warning' : 'liquor'}
+                      </span>
+                    </div>
+                    <span className="font-body text-sm text-on-surface">
+                      {pi.ingrediente?.nombre ?? `Ingrediente #${pi.ingrediente_id}`}
+                    </span>
+                    {pi.ingrediente?.es_alergeno && (
+                      <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-error-container text-on-error-container rounded-full text-[10px] font-bold uppercase tracking-wider">
+                        <span className="material-symbols-outlined text-[12px]">warning</span>
+                        Alérgeno
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-body text-sm font-semibold text-primary">
+                      {pi.cantidad} {pi.unidad_medida?.simbolo ?? ''}
+                    </span>
+                    {pi.es_removible && (
+                      <span className="inline-flex items-center gap-0.5 text-[11px] text-on-surface-variant bg-surface-container-lowest rounded px-1.5 py-0.5">
+                        <span className="material-symbols-outlined text-[12px]">unfold_more</span>
+                        removible
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
-  )
+  );
 }

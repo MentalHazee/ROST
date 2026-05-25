@@ -1,28 +1,19 @@
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import Session
+from app.database import init_db, get_session
+from app.db.seed import run_seed
+from app.routers.unidades_medida import router as unidades_medida_router
+from app.routers.categorias import router as categorias_router
+from app.routers.productos import router as productos_router
+from app.routers.ingredientes import router as ingredientes_router
+from app.routers.auth import router as auth_router
+from app.routers.pedidos import router as pedidos_router
+from app.routers.direcciones import router as direcciones_router
+from app.routers.admin import router as admin_router
+from app.routers.formas_pago import router as formas_pago_router
 
-from app.database import create_db_and_tables
-
-from app.models import unidad_medida, categoria, ingrediente, producto
-from app.models import producto_categoria, producto_ingrediente
-from app.models import rol, usuario, usuario_rol
-from app.models import forma_pago, estado_pedido
-from app.models import direccion_entrega, pedido
-from app.models import detalle_pedido, historial_estado_pedido
-
-from app.routers import unidades_medida, categorias, ingredientes, productos
-from app.routers import auth, pedidos, direcciones
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    create_db_and_tables()
-    yield
-
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(title="Catálogo de Productos - API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,10 +23,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(unidades_medida.router)
-app.include_router(categorias.router)
-app.include_router(ingredientes.router)
-app.include_router(productos.router)
-app.include_router(auth.router)
-app.include_router(pedidos.router)
-app.include_router(direcciones.router)
+app.include_router(unidades_medida_router)
+app.include_router(categorias_router)
+app.include_router(productos_router)
+app.include_router(ingredientes_router)
+app.include_router(auth_router)
+app.include_router(pedidos_router)
+app.include_router(direcciones_router)
+app.include_router(admin_router)
+app.include_router(formas_pago_router)
+
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
+    session = next(get_session())
+    try:
+        run_seed(session)
+    finally:
+        session.close()
+
+
+@app.get("/")
+def root():
+    return {"message": "Catálogo de Productos - API"}

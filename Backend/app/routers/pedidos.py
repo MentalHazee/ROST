@@ -1,55 +1,85 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
-
+from typing import List
+from fastapi import APIRouter, Depends, status
+from sqlmodel import Session
 from app.database import get_session
-from app.dependencies.auth import get_current_user, require_rol
+from app.core.uow import UnitOfWork
+from app.core.dependencies import get_current_user, require_role
 from app.models.usuario import Usuario
-from app.models.pedido import Pedido
-from app.uow import UnitOfWork
-from app.services.pedido_service import crear_pedido, avanzar_estado, get_by_id
-from app.schemas.pedido import PedidoCreate, PedidoRead, EstadoUpdate
+from app.schemas.pedido import PedidoCreate, PedidoRead, PedidoUpdateEstado
+from app.services.pedido_service import PedidoService
 
 router = APIRouter(prefix="/api/v1/pedidos", tags=["Pedidos"])
 
 
-@router.post("/", response_model=PedidoRead, status_code=201)
-def crear_nuevo_pedido(
-    data: PedidoCreate,
-    usuario: Usuario = Depends(get_current_user),
-):
-    with UnitOfWork() as uow:
-        pedido = crear_pedido(
-            uow, usuario.id, data.direccion_id, data.forma_pago_id,
-            [item.model_dump() for item in data.items],
-        )
-        uow.session.refresh(pedido)
-        return pedido
+def get_service(session: Session = Depends(get_session)) -> PedidoService:
+    uow = UnitOfWork(session)
+    return PedidoService(uow)
 
 
-@router.get("/", response_model=list[PedidoRead])
+@router.get("", response_model=List[PedidoRead])
 def listar_pedidos(
-    usuario: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(get_current_user),
+    service: PedidoService = Depends(get_service),
     session: Session = Depends(get_session),
 ):
-    codigos = {ur.rol_codigo for ur in usuario.roles}
-    if codigos.intersection({"ADMIN", "PEDIDOS"}):
-        pedidos = session.exec(select(Pedido)).all()
-    else:
-        pedidos = session.exec(
-            select(Pedido).where(Pedido.usuario_id == usuario.id)
-        ).all()
-    return pedidos
+    # CLIENT ve solo sus pedidos; ADMIN/PEDIDOS ven todos
+    from app.models.usuario_rol import UsuarioRol
+    from sqlmodel import select
+    user_roles = session.exec(
+        select(UsuarioRol).where(UsuarioRol.usuario_id == current_user.id)
+    ).all()
+    role_codes = [ur.rol_codigo for ur in user_roles]
+    if "ADMIN" in role_codes or "PEDIDOS" in role_codes:
+        return service.get_all()
+    return service.get_all(usuario_id=current_user.id)
 
 
-@router.patch("/{pedido_id}/estado", response_model=PedidoRead)
-def cambiar_estado(
-    pedido_id: int,
-    data: EstadoUpdate,
-    usuario: Usuario = Depends(get_current_user),
+@router.get("/{id}", response_model=PedidoRead)
+def obtener_pedido(
+    id: int,
+    current_user: Usuario = Depends(get_current_user),
+    service: PedidoService = Depends(get_service),
+    session: Session = Depends(get_session),
 ):
-    with UnitOfWork() as uow:
-        pedido = avanzar_estado(
-            uow, pedido_id, data.estado, usuario.id, data.notas,
-        )
-        uow.session.refresh(pedido)
-        return pedido
+    pedido = service.get_by_id(id)
+    # Verificar que el CLIENT solo vea sus pedidos
+    from app.models.usuario_rol import UsuarioRol
+    from sqlmodel import select
+    user_roles = session.exec(
+        select(UsuarioRol).where(UsuarioRol.usuario_id == current_user.id)
+    ).all()
+    role_codes = [ur.rol_codigo for ur in user_roles]
+    if "ADMIN" not in role_codes and "PEDIDOS" not in role_codes:
+        if pedido.usuario_id != current_user.id:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=403, detail="No tienes acceso a este pedido")
+    return pedido
+
+
+@router.post("", response_model=PedidoRead, status_code=status.HTTP_201_CREATED)
+def crear_pedido(
+    data: PedidoCreate,
+    current_user: Usuario = Depends(get_current_user),
+    service: PedidoService = Depends(get_service),
+):
+    return service.create(data, usuario_id=current_user.id)
+
+
+@router.patch("/{id}/estado", response_model=PedidoRead)
+def cambiar_estado(
+    id: int,
+    data: PedidoUpdateEstado,
+    current_user: Usuario = Depends(get_current_user),
+    service: PedidoService = Depends(get_service),
+    _=Depends(require_role(["ADMIN", "PEDIDOS"])),
+):
+    return service.avanzar_estado(id, data.nuevo_estado, current_user.id)
+
+
+@router.patch("/{id}/cancelar", response_model=PedidoRead)
+def cancelar_pedido(
+    id: int,
+    current_user: Usuario = Depends(get_current_user),
+    service: PedidoService = Depends(get_service),
+):
+    return service.cancelar_pedido(id, current_user.id)

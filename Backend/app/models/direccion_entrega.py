@@ -1,26 +1,34 @@
-from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional, TYPE_CHECKING
 from datetime import datetime
+from sqlmodel import SQLModel, Field, Relationship, Column, DateTime, func
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from .usuario import Usuario
-    from .pedido import Pedido
+    from app.models.usuario import Usuario
 
 
 class DireccionEntrega(SQLModel, table=True):
-    __tablename__ = "direccionentrega"
+    __tablename__ = "direcciones_entrega"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    usuario_id: int = Field(foreign_key="usuario.id")
-    alias: str = Field(max_length=50)
-    calle: str = Field(max_length=150)
-    numero: str = Field(max_length=10)
-    ciudad: str = Field(max_length=80)
-    provincia: str = Field(max_length=80)
-    codigo_postal: Optional[str] = Field(default=None, max_length=10)
+    usuario_id: int = Field(foreign_key="usuarios.id", nullable=False)
+    alias: str = Field(max_length=50, nullable=False)
+    direccion: str = Field(max_length=255, nullable=False)
+    ciudad: str = Field(max_length=100, nullable=False)
+    region: str = Field(max_length=100, nullable=False)
+    codigo_postal: Optional[str] = Field(default=None, max_length=20)
     es_principal: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    deleted_at: Optional[datetime] = None
+    created_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), server_default=func.now()),
+    )
+    updated_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(
+            DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        ),
+    )
+    deleted_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
 
-    usuario: Optional["Usuario"] = Relationship(back_populates="direcciones")
-    pedidos: list["Pedido"] = Relationship(back_populates="direccion")
+    usuario: "Usuario" = Relationship(back_populates="direcciones")
