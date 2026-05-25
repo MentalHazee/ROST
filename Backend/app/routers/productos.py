@@ -18,7 +18,7 @@ def get_service(session: Session = Depends(get_session)) -> ProductoService:
 @router.get("", response_model=List[ProductoRead])
 def listar_productos(
     q: Optional[str] = Query(None, description="Buscar por nombre"),
-    categoria_id: Optional[int] = Query(None, description="Filtrar por categoría"),
+    categoria_id: Optional[int] = Query(None, description="Filtrar por categorÃ­a"),
     disponible: Optional[bool] = Query(None, description="Filtrar por disponibilidad"),
     service: ProductoService = Depends(get_service),
 ):
@@ -44,7 +44,7 @@ def actualizar_producto(
     id: int,
     data: ProductoUpdate,
     service: ProductoService = Depends(get_service),
-    _=Depends(require_role(["ADMIN"])),
+    _=Depends(require_role(["ADMIN", "STOCK"])),
 ):
     return service.update(id, data)
 
